@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+import ollama
 # Import ChatOllama instead of LlamaCpp
 from langchain_community.chat_models import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
@@ -34,7 +35,7 @@ def extract_final_response(text: str) -> str:
 # 1. Initialize the Ollama model
 # Make sure to replace "llama3" with the name of a model you have installed.
 # To see your installed models, run `ollama list` in your terminal.
-llm = ChatOllama(model="deepseek-r1:1.5b")
+llm = ChatOllama(model="deepseek-r1:7b")
 
 # 2. Create the prompt template (slightly different for chat models)
 template = """
@@ -83,7 +84,57 @@ chain = prompt | llm | StrOutputParser() | extract_final_response
 # Initialize the FastAPI app
 app = FastAPI()
 
-@app.post("/get-advice")
-def get_financial_advice(request: SpendingRequest):
-    advice = chain.invoke({"spending_data": request.spending_data})
-    return {"advice": advice}
+class AnalysisRequest(BaseModel):
+    query: str
+    data_context: str
+
+class AnalysisResponse(BaseModel):
+    response: str
+
+@app.post("/analyze", response_model=AnalysisResponse)
+def analyze_data(request: AnalysisRequest):
+    """
+    Receives a query and data context from the C# application,
+    gets an analysis from Ollama, and returns the response.
+    """
+    print(f"Received query: {request.query}")
+    print(f"Received data context: {request.data_context[:200]}...")
+    # 4. Construct the prompt for Ollama
+    # We combine the system role, the data, and the user's query
+    prompt_messages = [
+        {
+            'role': 'system',
+            'content': (
+                'You are a helpful financial analyst. The user will provide you '
+                'with a set of data (as a JSON string) and a query. '
+                'Analyze the data to answer the query.'
+            ),
+        },
+        {
+            'role': 'user',
+            'content': f"""
+Here is the data:
+{request.data_context}
+
+Here is my query:
+{request.query}
+"""
+        }
+    ]
+
+    try:
+        # 5. Call the Ollama API
+        # Replace 'llama3' with your desired model
+        response_stream = ollama.chat(
+            model='deepseek-r1:7b',
+            messages=prompt_messages,
+            stream=False  # Set to False to get the full response at once
+        )
+        ai_response = response_stream['message']['content']
+
+    except Exception as e:
+        print(f"Error calling Ollama: {e}")
+        return AnalysisResponse(response=f"Error processing request: {e}")
+
+        # To run this server, save it as main.py and run this in your terminal:
+        # uvicorn main:app --reload

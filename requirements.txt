@@ -2,4 +2,5 @@ fastapi
 pydantic
 langchain-community
 langchain-core
-
+uvicorn
+ollama

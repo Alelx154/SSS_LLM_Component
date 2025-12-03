@@ -6,10 +6,7 @@ from langchain_community.chat_models import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import re
-
-# Define the data structure for the incoming request
-class SpendingRequest(BaseModel):
-    spending_data: str
+import uvicorn
 
 # Function to extract final response from reasoning models
 def extract_final_response(text: str) -> str:
@@ -97,8 +94,10 @@ def analyze_data(request: AnalysisRequest):
     Receives a query and data context from the C# application,
     gets an analysis from Ollama, and returns the response.
     """
+    print("\n" + "="*80)
     print(f"Received query: {request.query}")
-    print(f"Received data context: {request.data_context[:200]}...")
+    print(f"Received data context: {request.data_context}")
+    print("="*80 + "\n")
     # 4. Construct the prompt for Ollama
     # We combine the system role, the data, and the user's query
     prompt_messages = [
@@ -131,10 +130,22 @@ Here is my query:
             stream=False  # Set to False to get the full response at once
         )
         ai_response = response_stream['message']['content']
+        
+        # Clean up reasoning tags if present
+        ai_response = extract_final_response(ai_response)
+        
+        print("\n" + "="*80)
+        print("Returning response:")
+        print(ai_response)
+        print("="*80 + "\n")
+        return AnalysisResponse(response=ai_response)
 
     except Exception as e:
         print(f"Error calling Ollama: {e}")
         return AnalysisResponse(response=f"Error processing request: {e}")
 
-        # To run this server, save it as main.py and run this in your terminal:
-        # uvicorn main:app --reload
+if __name__ == "__main__":
+    # Start the server on 127.0.0.1:8000
+    print("Starting LLM Component Server on http://127.0.0.1:8000")
+    print("API endpoint available at: http://127.0.0.1:8000/analyze")
+    uvicorn.run(app, host="127.0.0.1", port=8000)
